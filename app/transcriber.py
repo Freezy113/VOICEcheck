@@ -362,15 +362,20 @@ class DeepgramTranscriptionService:
     # Audio duration ----------------------------------------------------------
 
     async def get_audio_duration(self, file_path: str) -> float:
-        """Return audio duration in seconds (async)."""
+        """Return audio duration in seconds (async). Returns 0.0 if duration cannot be determined."""
         loop = asyncio.get_event_loop()
 
         def _get_duration() -> float:
+            # Try pydub first
             try:
                 from pydub import AudioSegment
                 audio = AudioSegment.from_file(file_path)
                 return len(audio) / 1000.0
-            except ImportError:
+            except Exception as e:
+                logger.debug(f"pydub unavailable for duration: {e}")
+
+            # Try ffprobe as fallback
+            try:
                 import subprocess
                 proc = subprocess.run(
                     [
@@ -382,13 +387,16 @@ class DeepgramTranscriptionService:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
+                    timeout=10,
                 )
                 if proc.returncode == 0 and proc.stdout.strip():
                     return float(proc.stdout.strip())
-                raise RuntimeError("Failed to get audio duration")
             except Exception as e:
-                logger.error(f"Failed to get duration for {file_path}: {e}")
-                raise
+                logger.debug(f"ffprobe unavailable for duration: {e}")
+
+            # Fallback: duration unknown, continue without it
+            logger.warning(f"Could not determine duration for {file_path}, defaulting to 0.0")
+            return 0.0
 
         return await loop.run_in_executor(None, _get_duration)
 

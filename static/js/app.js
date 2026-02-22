@@ -7,8 +7,8 @@
 // Check authentication on page load
 function checkAuth() {
     const token = localStorage.getItem('access_token');
-    if (!token && window.location.pathname !== '/static/auth.html' && !window.location.pathname.includes('/auth-org/') && !window.location.pathname.includes('/login/')) {
-        window.location.href = '/static/auth.html';
+    if (!token && window.location.pathname !== '/auth.html' && !window.location.pathname.includes('/auth-org/') && !window.location.pathname.includes('/login/')) {
+        window.location.href = './auth.html';
         return false;
     }
     return true;
@@ -37,7 +37,7 @@ function authFetch(url, options = {}) {
     return fetch(url, options).then(response => {
         if (response.status === 401 && !url.includes('/auth/')) {
             localStorage.clear();
-            window.location.href = '/static/auth.html';
+            window.location.href = './auth.html';
         }
         return response;
     });
@@ -50,6 +50,16 @@ class VoiceCheckApp {
         this.taskId = null;
         this.selectedFile = null;
         this.statusCheckInterval = null;
+
+        // Recording state
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.recordedBlob = null;
+        this.isRecording = false;
+        this.recordingTimer = null;
+        this.recordingSeconds = 0;
+        this.audioStream = null;
+        this._recordedAudioUrl = null;
 
         this.currentPage = 1;
         this.dialogsPerPage = 20;
@@ -100,6 +110,17 @@ class VoiceCheckApp {
         this.fileSize = document.querySelector('#upload-tab .file-size');
         this.changeFileBtn = document.getElementById('changeFileBtn');
         this.uploadBtn = document.getElementById('uploadBtn');
+
+        // Recording elements
+        this.modeBtns = document.querySelectorAll('.mode-btn');
+        this.recordArea = document.getElementById('recordArea');
+        this.recordBtn = document.getElementById('recordBtn');
+        this.recordStopBtn = document.getElementById('recordStopBtn');
+        this.recordTimer = document.getElementById('recordTimer');
+        this.recordStatus = document.getElementById('recordStatus');
+        this.recordIcon = document.getElementById('recordIcon');
+        this.recordedAudio = document.getElementById('recordedAudio');
+
         this.languageSelector = document.getElementById('languageSelector');
         this.languageSelect = document.getElementById('languageSelect');
         this.sellerInput = document.getElementById('sellerInput');
@@ -136,6 +157,20 @@ class VoiceCheckApp {
         this.tabBtns.forEach(btn => {
             btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
         });
+
+        // Mode switcher (file/record)
+        this.modeBtns.forEach(btn => {
+            btn.addEventListener('click', () => this.switchInputMode(btn.dataset.mode));
+        });
+
+        // Recording controls
+        if (this.recordBtn) {
+            this.recordBtn.addEventListener('click', () => this.startRecording());
+        }
+        if (this.recordStopBtn) {
+            this.recordStopBtn.addEventListener('click', () => this.stopRecording());
+        }
+
         this.attachUploadEventListeners();
 
         this.statusFilter.addEventListener('change', () => { this.filters.status = this.statusFilter.value; this.currentPage = 1; this.loadDialogs(); });
@@ -234,7 +269,7 @@ class VoiceCheckApp {
             this.fileId = data.file_id;
             await this.startTranscription();
         } catch (error) {
-            this.showError(error.message); this.uploadBtn.disabled = false; this.uploadBtn.textContent = 'Загрузить файл';
+            this.showError(error.message); this.uploadBtn.disabled = false; this.uploadBtn.textContent = 'Загрузить и анализировать';
         }
     }
 
@@ -316,9 +351,21 @@ class VoiceCheckApp {
 
     resetUpload() {
         this.fileId = null; this.taskId = null; this.selectedFile = null; this.fileInput.value = '';
-        this.uploadArea.style.display = 'block'; this.fileInfo.classList.remove('active');
+
+        // Reset recording state
+        this._resetRecordingUI();
+        if (this.isRecording) this.stopRecording();
+
+        // Reset mode buttons to "file"
+        this.modeBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === 'file');
+        });
+        this.uploadArea.style.display = 'block';
+        this.recordArea.style.display = 'none';
+
+        this.fileInfo.classList.remove('active');
         this.languageSelector.style.display = 'none'; this.sellerInput.style.display = 'none';
-        this.sellerNameInput.value = ''; this.uploadBtn.disabled = true; this.uploadBtn.textContent = 'Загрузить файл';
+        this.sellerNameInput.value = ''; this.uploadBtn.disabled = true; this.uploadBtn.textContent = 'Загрузить и анализировать';
         this.statusArea.classList.remove('active'); this.resultArea.classList.remove('active');
         this.progressFill.style.width = '0%'; this.hideError();
     }
@@ -662,6 +709,177 @@ class VoiceCheckApp {
         const s = Math.floor(seconds); const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const sec = s % 60;
         if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
         return `${m}:${sec.toString().padStart(2, '0')}`;
+    }
+
+    // Input mode switcher
+    switchInputMode(mode) {
+        // Stop active recording when switching away from record mode
+        if (this.isRecording) this.stopRecording();
+
+        this.modeBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+
+        if (mode === 'file') {
+            this.uploadArea.style.display = 'block';
+            this.recordArea.style.display = 'none';
+        } else {
+            this.uploadArea.style.display = 'none';
+            this.recordArea.style.display = 'block';
+            this._resetRecordingUI();
+        }
+    }
+
+    // Recording functions
+    _getRecordingMimeType() {
+        const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+        for (const type of types) {
+            if (MediaRecorder.isTypeSupported(type)) return type;
+        }
+        return '';
+    }
+
+    _getFileExtForMime(mimeType) {
+        if (mimeType.includes('webm')) return 'webm';
+        if (mimeType.includes('ogg')) return 'ogg';
+        if (mimeType.includes('mp4')) return 'mp4';
+        return 'webm';
+    }
+
+    _revokeRecordingUrl() {
+        if (this._recordedAudioUrl) {
+            URL.revokeObjectURL(this._recordedAudioUrl);
+            this._recordedAudioUrl = null;
+        }
+    }
+
+    _resetRecordingUI() {
+        this.recordBtn.style.display = 'block';
+        this.recordStopBtn.style.display = 'none';
+        this.recordIcon.classList.remove('recording');
+        this.recordBtn.textContent = 'Начать запись';
+        this.recordStatus.textContent = 'Нажмите для записи';
+        this.recordTimer.textContent = '00:00';
+        this.recordedAudio.style.display = 'none';
+        this.recordedAudio.src = '';
+        this._revokeRecordingUrl();
+        this.recordedBlob = null;
+        this.recordingSeconds = 0;
+    }
+
+    async startRecording() {
+        try {
+            // Clean up previous recording
+            this._revokeRecordingUrl();
+            this.recordedAudio.style.display = 'none';
+            this.recordedAudio.src = '';
+
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.audioStream = stream;
+            this.audioChunks = [];
+
+            // Detect best supported MIME type
+            const mimeType = this._getRecordingMimeType();
+            const recorderOptions = mimeType ? { mimeType } : undefined;
+            this.mediaRecorder = new MediaRecorder(stream, recorderOptions);
+            const actualMime = this.mediaRecorder.mimeType || mimeType || 'audio/webm';
+
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    this.audioChunks.push(event.data);
+                }
+            };
+
+            this.mediaRecorder.onstop = () => {
+                if (this.audioChunks.length === 0) {
+                    this.showError('Запись пуста. Попробуйте снова.');
+                    this._resetRecordingUI();
+                    return;
+                }
+
+                this.recordedBlob = new Blob(this.audioChunks, { type: actualMime });
+
+                if (this.recordedBlob.size === 0) {
+                    this.showError('Запись пуста. Попробуйте снова.');
+                    this._resetRecordingUI();
+                    return;
+                }
+
+                this._recordedAudioUrl = URL.createObjectURL(this.recordedBlob);
+                this.recordedAudio.src = this._recordedAudioUrl;
+                this.recordedAudio.style.display = 'block';
+
+                // Create file from blob with correct extension
+                const ext = this._getFileExtForMime(actualMime);
+                const filename = `recording_${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`;
+                this.selectedFile = new File([this.recordedBlob], filename, { type: actualMime });
+
+                // Show file info and enable upload
+                this.fileName.textContent = filename;
+                this.fileSize.textContent = this.formatFileSize(this.recordedBlob.size);
+                this.uploadArea.style.display = 'none';
+                this.recordArea.style.display = 'none';
+                this.fileInfo.classList.add('active');
+                this.languageSelector.style.display = 'block';
+                this.sellerInput.style.display = 'block';
+                this.uploadBtn.disabled = false;
+                this.uploadBtn.textContent = 'Загрузить и анализировать';
+            };
+
+            this.mediaRecorder.onerror = (event) => {
+                console.error('MediaRecorder error:', event.error);
+                this.showError('Ошибка записи. Попробуйте снова.');
+                this.stopRecording();
+            };
+
+            this.mediaRecorder.start(1000); // collect data every 1s for reliability
+            this.isRecording = true;
+            this.recordingSeconds = 0;
+
+            // Update UI
+            this.recordBtn.style.display = 'none';
+            this.recordStopBtn.style.display = 'block';
+            this.recordIcon.classList.add('recording');
+            this.recordStatus.textContent = 'Идет запись...';
+
+            // Start timer
+            this.recordingTimer = setInterval(() => {
+                this.recordingSeconds++;
+                const mins = Math.floor(this.recordingSeconds / 60);
+                const secs = this.recordingSeconds % 60;
+                this.recordTimer.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }, 1000);
+
+        } catch (error) {
+            console.error('Error accessing microphone:', error);
+            this.showError('Не удалось получить доступ к микрофону. Проверьте разрешения.');
+        }
+    }
+
+    stopRecording() {
+        if (this.mediaRecorder && this.isRecording) {
+            this.mediaRecorder.stop();
+            this.isRecording = false;
+
+            // Stop timer
+            if (this.recordingTimer) {
+                clearInterval(this.recordingTimer);
+                this.recordingTimer = null;
+            }
+
+            // Stop microphone stream
+            if (this.audioStream) {
+                this.audioStream.getTracks().forEach(track => track.stop());
+                this.audioStream = null;
+            }
+
+            // Update UI
+            this.recordBtn.style.display = 'block';
+            this.recordStopBtn.style.display = 'none';
+            this.recordIcon.classList.remove('recording');
+            this.recordStatus.textContent = 'Запись завершена';
+            this.recordBtn.textContent = 'Записать снова';
+        }
     }
 }
 

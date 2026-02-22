@@ -38,6 +38,10 @@ from typing import Dict, Optional, Any, List
 from datetime import datetime
 from uuid import uuid4
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import (
     FastAPI,
     UploadFile,
@@ -96,7 +100,7 @@ logger = logging.getLogger(__name__)
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB maximum file size
 ALLOWED_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".mp4", ".webm"}
 # Upload directory setup
-UPLOAD_DIR = Path("/app/uploads")
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "/app/uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # In-memory storage (use Redis/DB in production)
@@ -184,14 +188,16 @@ else:
 @app.get("/login/{code}")
 async def org_login_page(code: str):
     """Serve the organization login page for employee access via shareable link."""
-    index_path = Path("/app/static/auth-org.html")
+    static_dir = Path(os.getenv("STATIC_DIR", "/app/static"))
+    index_path = static_dir / "auth-org.html"
     if index_path.exists():
         return FileResponse(index_path)
     raise HTTPException(status_code=404, detail="Login page not found")
 
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="/app/static"), name="static")
+static_dir = os.getenv("STATIC_DIR", "/app/static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Event handlers for database initialization and cleanup
 @app.on_event("startup")
@@ -468,18 +474,36 @@ async def process_transcription_with_db(
 
 # API Routes
 
+def _serve_static_html(filename: str):
+    static_dir = Path(os.getenv("STATIC_DIR", "/app/static"))
+    path = static_dir / filename
+    if path.exists():
+        return FileResponse(path)
+    return HTMLResponse(f"<h1>404 - {filename} not found</h1>", status_code=404)
+
+
 @app.get("/", response_model=None)
 async def root() -> HTMLResponse:
-    """
-    Serve the main HTML interface page.
+    """Serve the main HTML interface page."""
+    return _serve_static_html("index.html")
 
-    Authentication is checked client-side via JavaScript in index.html.
-    The page is always served, but JavaScript will redirect to auth if not logged in.
-    """
-    index_path = Path("/app/static/index.html")
-    if index_path.exists():
-        return FileResponse(index_path)
-    return HTMLResponse("<h1>VOICEcheck API</h1><p>See /docs for API documentation</p>")
+
+@app.get("/auth.html", response_model=None)
+async def auth_page():
+    """Serve the authentication page."""
+    return _serve_static_html("auth.html")
+
+
+@app.get("/auth-org.html", response_model=None)
+async def auth_org_page():
+    """Serve the organization auth page."""
+    return _serve_static_html("auth-org.html")
+
+
+@app.get("/select-organization.html", response_model=None)
+async def select_org_page():
+    """Serve the organization selection page."""
+    return _serve_static_html("select-organization.html")
 
 
 @app.get("/health")
