@@ -1,0 +1,15 @@
+{
+  "appId": "com.voicecheck.app",
+  "appName": "VOICEcheck",
+  "webDir": "www",
+  "server": {
+    "url": "http://localhost:8001",
+    "cleartext": true
+  },
+  "android": {
+    "buildOptions": {
+      "keystorePath": "",
+      "keystoreAlias": ""
+    }
+  }
+}

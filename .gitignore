@@ -1,6 +1,47 @@
-.env
+# Python
 __pycache__/
-*.pyc
-uploads/
-*.db
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Android build
+android/.gradle/
+android/app/build/
+android/build/
+*.apk
+*.aab
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Uploads
+uploads/
+
+# Large binaries
+*.zip
+*.tar.gz
+*.msi
+*.exe
+
+# Claude
+.claude/

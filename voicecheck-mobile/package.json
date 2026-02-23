@@ -1,0 +1,23 @@
+{
+  "name": "voicecheck-mobile",
+  "version": "1.0.0",
+  "description": "VOICEcheck Mobile App",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo 'No build step needed - using static files'",
+    "copy": "npx cap copy",
+    "sync": "npx cap sync",
+    "open:android": "npx cap open android",
+    "run:android": "npx cap run android"
+  },
+  "keywords": ["voicecheck", "mobile", "capacitor"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/cli": "^8.1.0",
+    "@capacitor/core": "^8.1.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.1.0"
+  }
+}

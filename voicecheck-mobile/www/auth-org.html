@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOICEcheck - Вход в организацию</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/auth.css">
+</head>
+<body>
+    <div class="bg-orbs"><div class="bg-orb-3"></div></div>
+
+    <div class="auth-container">
+        <div class="auth-header">
+            <div class="auth-logo">VOICEcheck</div>
+            <div class="auth-subtitle">Вход в организацию</div>
+        </div>
+
+        <div class="org-info" id="orgInfo" style="display: none;">
+            <div class="org-name" id="orgName"></div>
+            <div class="org-code" id="orgCode"></div>
+        </div>
+
+        <div class="auth-tabs">
+            <button class="auth-tab active" data-form="login">Вход</button>
+            <button class="auth-tab" data-form="register">Регистрация</button>
+        </div>
+
+        <div class="auth-message" id="authMessage"></div>
+
+        <!-- Login Form -->
+        <form class="auth-form active" id="loginForm">
+            <div class="form-group">
+                <label class="form-label" for="orgCodeInput">Код организации</label>
+                <input type="text" id="orgCodeInput" class="form-input"
+                    placeholder="XXXXXX" maxlength="6"
+                    style="text-transform: uppercase; text-align: center; font-size: 20px; letter-spacing: 2px;"
+                    required>
+                <div class="form-error" id="orgCodeInputError"></div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="loginUsername">Логин</label>
+                <input type="text" id="loginUsername" class="form-input" placeholder="Ваш логин" required>
+                <div class="form-error" id="loginUsernameError"></div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="loginPassword">Пароль</label>
+                <div class="password-toggle">
+                    <input type="password" id="loginPassword" class="form-input" placeholder="Введите пароль" required>
+                    <button type="button" class="password-toggle-btn" onclick="togglePassword('loginPassword')">Показать</button>
+                </div>
+                <div class="form-error" id="loginPasswordError"></div>
+            </div>
+
+            <button type="submit" class="btn" id="loginBtn">
+                <span id="loginBtnText">Войти</span>
+            </button>
+        </form>
+
+        <!-- Register Form -->
+        <form class="auth-form" id="registerForm">
+            <div class="form-group">
+                <label class="form-label" for="regOrgCode">Код организации</label>
+                <input type="text" id="regOrgCode" class="form-input"
+                    placeholder="XXXXXX" maxlength="6"
+                    style="text-transform: uppercase; text-align: center; font-size: 20px; letter-spacing: 2px;"
+                    required>
+                <div class="form-error" id="regOrgCodeError"></div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="regFullName">Полное имя</label>
+                <input type="text" id="regFullName" class="form-input" placeholder="Иван Иванов" required>
+                <div class="form-error" id="regFullNameError"></div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="regUsername">Логин</label>
+                <input type="text" id="regUsername" class="form-input" placeholder="Придумайте логин" required minlength="2">
+                <div class="form-error" id="regUsernameError"></div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="regPassword">Пароль</label>
+                <div class="password-toggle">
+                    <input type="password" id="regPassword" class="form-input" placeholder="Минимум 8 символов" required minlength="8">
+                    <button type="button" class="password-toggle-btn" onclick="togglePassword('regPassword')">Показать</button>
+                </div>
+                <div class="form-error" id="regPasswordError"></div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="regPasswordConfirm">Подтвердите пароль</label>
+                <div class="password-toggle">
+                    <input type="password" id="regPasswordConfirm" class="form-input" placeholder="Повторите пароль" required>
+                    <button type="button" class="password-toggle-btn" onclick="togglePassword('regPasswordConfirm')">Показать</button>
+                </div>
+                <div class="form-error" id="regPasswordConfirmError"></div>
+            </div>
+
+            <button type="submit" class="btn" id="registerBtn">
+                <span id="registerBtnText">Зарегистрироваться</span>
+            </button>
+        </form>
+
+        <div class="login-link">
+            <a href="./auth.html">Вход через Email</a>
+        </div>
+    </div>
+
+    <script src="./js/config.js?v=2"></script>
+    <script src="./js/utils.js?v=2"></script>
+    <script>
+        const API_BASE = window.API_BASE || 'http://localhost:8001';
+
+        // Tab switching
+        document.querySelectorAll('.auth-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.form + 'Form').classList.add('active');
+                hideMessage();
+                clearAllErrors();
+            });
+        });
+
+        // Get organization code from URL - supports both /login/{CODE} and /auth-org/{CODE}
+        function getOrgCodeFromUrl() {
+            const pathParts = window.location.pathname.split('/');
+            // Check /login/{CODE}
+            const loginIndex = pathParts.indexOf('login');
+            if (loginIndex !== -1 && pathParts[loginIndex + 1]) {
+                return pathParts[loginIndex + 1].toUpperCase();
+            }
+            // Check /auth-org/{CODE}
+            const authOrgIndex = pathParts.indexOf('auth-org');
+            if (authOrgIndex !== -1 && pathParts[authOrgIndex + 1]) {
+                return pathParts[authOrgIndex + 1].toUpperCase();
+            }
+            return null;
+        }
+
+        // Load organization info by code
+        async function loadOrganizationByCode(code) {
+            try {
+                const response = await fetch(API_BASE + `/organizations/by-code/${code}`);
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        showFieldError('orgCodeInput', 'Организация с таким кодом не найдена');
+                        return null;
+                    }
+                    throw new Error('Failed to load organization');
+                }
+                const org = await response.json();
+                document.getElementById('orgInfo').style.display = 'block';
+                document.getElementById('orgName').textContent = org.name;
+                document.getElementById('orgCode').textContent = org.access_code;
+                document.getElementById('orgCodeInput').value = org.access_code;
+                return org;
+            } catch (err) {
+                console.error('Error loading organization:', err);
+                showMessage('Ошибка загрузки организации', 'error');
+                return null;
+            }
+        }
+
+        // Login handler
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearAllErrors();
+            hideMessage();
+
+            const orgCode = document.getElementById('orgCodeInput').value.trim().toUpperCase();
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+
+            if (!orgCode) { showFieldError('orgCodeInput', 'Введите код организации'); return; }
+            if (orgCode.length !== 6) { showFieldError('orgCodeInput', 'Код должен содержать 6 символов'); return; }
+            if (!username) { showFieldError('loginUsername', 'Введите логин'); return; }
+            if (!password) { showFieldError('loginPassword', 'Введите пароль'); return; }
+
+            setButtonLoading('loginBtn', true);
+
+            try {
+                const orgResponse = await fetch(API_BASE + `/organizations/by-code/${orgCode}`);
+                if (!orgResponse.ok) throw new Error('Организация не найдена');
+                const org = await orgResponse.json();
+
+                const response = await fetch(API_BASE + '/auth/login-with-username', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, organization_id: org.id })
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    const d = data.detail;
+                    const msg = typeof d === 'string' ? d : (d?.detail || d?.error || 'Ошибка входа');
+                    throw new Error(msg);
+                }
+
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('refresh_token', data.refresh_token);
+                localStorage.setItem('user', JSON.stringify(data.user));
+                localStorage.setItem('current_org', JSON.stringify(data.organization));
+                window.location.href = '/';
+            } catch (err) {
+                showMessage(err.message, 'error');
+                setButtonLoading('loginBtn', false, 'Войти');
+            }
+        });
+
+        // Register handler
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearAllErrors();
+            hideMessage();
+
+            const orgCode = document.getElementById('regOrgCode').value.trim().toUpperCase();
+            const fullName = document.getElementById('regFullName').value.trim();
+            const username = document.getElementById('regUsername').value.trim();
+            const password = document.getElementById('regPassword').value;
+            const confirm = document.getElementById('regPasswordConfirm').value;
+
+            if (!orgCode || orgCode.length !== 6) { showFieldError('regOrgCode', 'Введите 6-значный код организации'); return; }
+            if (!fullName) { showFieldError('regFullName', 'Введите полное имя'); return; }
+            if (!username || username.length < 2) { showFieldError('regUsername', 'Логин минимум 2 символа'); return; }
+            if (password.length < 8) { showFieldError('regPassword', 'Минимум 8 символов'); return; }
+            if (password !== confirm) { showFieldError('regPasswordConfirm', 'Пароли не совпадают'); return; }
+
+            setButtonLoading('registerBtn', true);
+
+            try {
+                const response = await fetch(API_BASE + `/organizations/join/${orgCode}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, full_name: fullName })
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    const d = data.detail;
+                    const msg = typeof d === 'string' ? d : (d?.detail || d?.error || 'Ошибка регистрации');
+                    throw new Error(msg);
+                }
+
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('refresh_token', data.refresh_token);
+                localStorage.setItem('user', JSON.stringify(data.user));
+                localStorage.setItem('current_org', JSON.stringify(data.organization));
+
+                showMessage('Регистрация успешна! Перенаправление...', 'success');
+                setTimeout(() => { window.location.href = '/'; }, 1000);
+            } catch (err) {
+                showMessage(err.message, 'error');
+                setButtonLoading('registerBtn', false, 'Зарегистрироваться');
+            }
+        });
+
+        // Clear errors on input
+        document.querySelectorAll('.form-input').forEach(input => {
+            input.addEventListener('input', () => clearFieldError(input.id));
+        });
+
+        // Load organization on page load if code in URL
+        window.addEventListener('load', () => {
+            const orgCode = getOrgCodeFromUrl();
+            if (orgCode) {
+                loadOrganizationByCode(orgCode);
+                document.getElementById('regOrgCode').value = orgCode;
+            }
+
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                fetch(API_BASE + '/auth/me', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                }).then(res => { if (res.ok) window.location.href = '/'; });
+            }
+        });
+    </script>
+</body>
+</html>

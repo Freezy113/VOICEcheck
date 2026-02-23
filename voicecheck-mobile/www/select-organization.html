@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOICEcheck - Выбор организации</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/auth.css">
+</head>
+<body>
+    <div class="bg-orbs"><div class="bg-orb-3"></div></div>
+
+    <div class="org-container">
+        <div class="org-header">
+            <div class="org-logo">VOICEcheck</div>
+            <div class="org-subtitle">Выберите организацию для работы</div>
+        </div>
+
+        <div class="error-msg" id="orgError" style="display: none;"></div>
+
+        <div id="orgList" class="org-list">
+            <div class="loading">
+                <div class="spinner"></div>
+                <div>Загрузка организаций...</div>
+            </div>
+        </div>
+
+        <div class="logout-btn">
+            <a href="#" onclick="logout()">Выйти из аккаунта</a>
+        </div>
+    </div>
+
+    <script src="./js/config.js?v=2"></script>
+    <script src="./js/utils.js?v=2"></script>
+    <script>
+        const API_BASE = window.API_BASE || 'http://localhost:8001';
+        let currentToken = localStorage.getItem('access_token');
+
+        async function loadOrganizations() {
+            if (!currentToken) {
+                window.location.href = './auth.html';
+                return;
+            }
+
+            try {
+                const response = await fetch(API_BASE + '/auth/organizations', {
+                    headers: { 'Authorization': 'Bearer ' + currentToken }
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    window.location.href = './auth.html';
+                    return;
+                }
+
+                if (!response.ok) throw new Error('Failed to load organizations: ' + response.status);
+
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Invalid response format');
+                }
+
+                const orgs = await response.json();
+                if (!Array.isArray(orgs)) throw new Error('Invalid response format');
+
+                if (orgs.length === 0) {
+                    window.location.href = '/';
+                    return;
+                }
+
+                renderOrganizations(orgs);
+            } catch (err) {
+                console.error('Error loading organizations:', err);
+                document.getElementById('orgError').textContent = 'Ошибка: ' + err.message;
+                document.getElementById('orgError').style.display = 'block';
+            }
+        }
+
+        function renderOrganizations(orgs) {
+            const container = document.getElementById('orgList');
+            const roleLabels = {
+                'owner': 'Владелец',
+                'admin': 'Администратор',
+                'member': 'Участник',
+                'viewer': 'Зритель'
+            };
+
+            container.innerHTML = orgs.map(org => `
+                <div class="org-card" onclick="selectOrganization('${org.id}')">
+                    <div class="org-icon">${org.name.charAt(0).toUpperCase()}</div>
+                    <div class="org-info-text">
+                        <div class="org-name">${escapeHtml(org.name)}</div>
+                        <div class="org-role">${roleLabels[org.role] || org.role}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function selectOrganization(orgId) {
+            try {
+                const response = await fetch(API_BASE + `/auth/select-organization/${orgId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + currentToken }
+                });
+
+                if (!response.ok) throw new Error('Failed to select organization');
+
+                const data = await response.json();
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('refresh_token', data.refresh_token);
+                currentToken = data.access_token;
+
+                const orgResponse = await fetch(API_BASE + '/auth/organizations', {
+                    headers: { 'Authorization': 'Bearer ' + currentToken }
+                });
+                const orgs = await orgResponse.json();
+                const currentOrg = orgs.find(o => o.id === orgId);
+                if (currentOrg) {
+                    localStorage.setItem('current_org', JSON.stringify(currentOrg));
+                }
+
+                window.location.href = '/';
+            } catch (err) {
+                console.error(err);
+                document.getElementById('orgError').textContent = 'Ошибка выбора организации';
+                document.getElementById('orgError').style.display = 'block';
+            }
+        }
+
+        loadOrganizations();
+    </script>
+</body>
+</html>

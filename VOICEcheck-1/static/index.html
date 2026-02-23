@@ -43,11 +43,34 @@
             <div class="tab-pane active" id="upload-tab">
                 <div class="container">
                     <div class="card">
+                        <div class="input-mode-selector">
+                            <button class="mode-btn active" data-mode="file">Загрузить файл</button>
+                            <button class="mode-btn" data-mode="record">Записать</button>
+                        </div>
+
                         <div class="upload-area" id="uploadArea">
                             <input type="file" id="fileInput" accept=".mp3,.wav,.m4a,.ogg,.flac,.mp4,.webm">
                             <div class="upload-icon">+</div>
                             <div class="upload-text">Выберите аудиофайл</div>
                             <div class="upload-hint">MP3, WAV, M4A, OGG, FLAC (макс. 50MB)</div>
+                        </div>
+
+                        <div class="record-area" id="recordArea" style="display: none;">
+                            <div class="record-content">
+                                <div class="record-icon" id="recordIcon">
+                                    <svg width="80" height="80" viewBox="0 0 80 80">
+                                        <circle cx="40" cy="40" r="38" fill="none" stroke="#e74c3c" stroke-width="3"/>
+                                        <circle cx="40" cy="40" r="20" fill="#e74c3c" id="recordDot"/>
+                                    </svg>
+                                </div>
+                                <div class="record-info">
+                                    <div class="record-timer" id="recordTimer">00:00</div>
+                                    <div class="record-status" id="recordStatus">Нажмите для записи</div>
+                                </div>
+                                <button class="btn btn-record" id="recordBtn">Начать запись</button>
+                                <button class="btn btn-secondary btn-record-stop" id="recordStopBtn" style="display: none;">Остановить</button>
+                                <audio id="recordedAudio" controls style="display: none; width: 100%; margin-top: 20px;"></audio>
+                            </div>
                         </div>
 
                         <div class="file-info" id="fileInfo">
@@ -350,9 +373,10 @@
         </div>
     </div>
 
-    <script src="/static/js/api.js"></script>
-    <script src="/static/js/utils.js"></script>
-    <script src="/static/js/organizations.js"></script>
-    <script src="/static/js/app.js?v=17"></script>
+    <script src="/static/js/config.js?v=2"></script>
+    <script src="/static/js/api.js?v=2"></script>
+    <script src="/static/js/utils.js?v=2"></script>
+    <script src="/static/js/organizations.js?v=2"></script>
+    <script src="/static/js/app.js?v=18"></script>
 </body>
 </html>
