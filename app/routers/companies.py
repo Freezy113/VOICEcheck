@@ -251,6 +251,7 @@ async def list_companies(
     search: Optional[str] = Query(None, description="Search in name, INN, contact"),
     industry: Optional[str] = Query(None),
     funnel_stage: Optional[str] = Query(None),
+    responsible: Optional[str] = Query(None, description="Filter by responsible person"),
     sort_by: str = Query("created_at", description="name|created_at|meetings_count|avg_score"),
     sort_dir: str = Query("desc", description="asc|desc"),
     db: AsyncSession = Depends(get_db),
@@ -277,6 +278,8 @@ async def list_companies(
         conditions.append(db_models.Company.industry.ilike(f"%{industry}%"))
     if funnel_stage:
         conditions.append(db_models.Company.funnel_stage == funnel_stage)
+    if responsible:
+        conditions.append(db_models.Company.responsible.ilike(f"%{responsible}%"))
 
     where_clause = and_(*conditions) if conditions else True
 

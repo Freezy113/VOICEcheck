@@ -18,7 +18,7 @@
                 <h1 class="app-title">VOICEcheck</h1>
 
                 <nav class="header-tabs">
-                    <button class="tab-btn active" data-tab="upload">Загрузка</button>
+                    <button class="tab-btn active" data-tab="upload">Загрузка диалога</button>
                     <button class="tab-btn" data-tab="dialogs">Диалоги</button>
                     <button class="tab-btn" data-tab="companies">Компании</button>
                     <button class="tab-btn" data-tab="dashboard">Дашборд</button>
@@ -114,6 +114,11 @@
                             </select>
                         </div>
 
+                        <div class="seller-input" id="dialogNameGroup" style="display: none;">
+                            <label for="dialogNameInput">Наименование <span style="color:var(--text-muted);font-weight:400;">(необязательно)</span></label>
+                            <input type="text" id="dialogNameInput" placeholder="Название диалога (заменит имя файла)" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--input-bg,#1e2028);color:var(--text);font-size:.9rem;">
+                        </div>
+
                         <button class="btn" id="uploadBtn" disabled>Загрузить и анализировать</button>
                     </div>
 
@@ -169,6 +174,9 @@
                                 <option value="7">7+</option>
                                 <option value="5">5+</option>
                             </select>
+                            <select id="companyFilter">
+                                <option value="">Все компании</option>
+                            </select>
                             <input type="date" id="dateFromFilter">
                             <input type="date" id="dateToFilter">
                         </div>
@@ -194,6 +202,7 @@
                         </div>
                         <div class="companies-filters">
                             <input type="text" id="companySearch" placeholder="Поиск по названию, ИНН..." class="filter-input">
+                            <input type="text" id="companiesResponsibleFilter" placeholder="Ответственный..." class="filter-input">
                             <select id="companySortBy" class="filter-input">
                                 <option value="created_at">По дате добавления</option>
                                 <option value="name">По названию</option>
@@ -207,6 +216,7 @@
                                     <tr>
                                         <th>Название</th>
                                         <th>Контакт</th>
+                                        <th>Ответственный</th>
                                         <th>Встречи</th>
                                         <th>Последняя</th>
                                         <th>Ср. балл</th>
@@ -214,7 +224,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="companiesTbody">
-                                    <tr><td colspan="6" class="no-data">Загрузка...</td></tr>
+                                    <tr><td colspan="7" class="no-data">Загрузка...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -611,7 +621,7 @@
     <script src="/static/js/api.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/organizations.js"></script>
-    <script src="/static/js/companies.js?v=2"></script>
-    <script src="/static/js/app.js?v=22"></script>
+    <script src="/static/js/companies.js?v=3"></script>
+    <script src="/static/js/app.js?v=23"></script>
 </body>
 </html>

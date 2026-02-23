@@ -345,6 +345,7 @@ async def get_dialogs(
     date_to: Optional[datetime] = Query(None, description="To date"),
     search: Optional[str] = Query(None, description="Search in filename"),
     seller_name: Optional[str] = Query(None, description="Filter by seller name"),
+    company_id: Optional[str] = Query(None, description="Filter by company ID"),
     min_score: Optional[float] = Query(None, ge=0, le=10, description="Min overall score"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_auth),
@@ -360,8 +361,11 @@ async def get_dialogs(
         org_ids = await get_user_org_ids(user, db)
         active_org_id = org_ctx.organization.id if org_ctx else None
 
-        query = select(db_models.Dialog).options(
+        query = select(db_models.Dialog, db_models.Company).options(
             selectinload(db_models.Dialog.analyses)
+        ).outerjoin(
+            db_models.Company,
+            db_models.Dialog.company_id == db_models.Company.id
         )
         count_query = select(func.count(db_models.Dialog.id))
         conditions = []
@@ -378,6 +382,11 @@ async def get_dialogs(
             conditions.append(db_models.Dialog.filename.ilike(f"%{search}%"))
         if seller_name:
             conditions.append(db_models.Dialog.seller_name.ilike(f"%{seller_name}%"))
+        if company_id:
+            try:
+                conditions.append(db_models.Dialog.company_id == UUID(company_id))
+            except ValueError:
+                pass
 
         # Score filter requires joining with analysis
         if min_score is not None:
@@ -409,16 +418,18 @@ async def get_dialogs(
         query = query.offset(offset).limit(limit)
 
         result = await db.execute(query)
-        dialogs = result.scalars().unique().all()
+        rows = result.unique().all()
 
         items = []
-        for dialog in dialogs:
+        for row in rows:
+            dialog = row[0]
+            company = row[1]
             has_analysis = bool(dialog.analyses)
             overall_score = None
             if has_analysis:
                 overall_score = dialog.analyses[0].scores.get('overall')
 
-            company_id = getattr(dialog, 'company_id', None)
+            dialog_company_id = getattr(dialog, 'company_id', None)
             items.append({
                 "id": str(dialog.id),
                 "filename": dialog.filename,
@@ -426,7 +437,8 @@ async def get_dialogs(
                 "status": dialog.status,
                 "language": dialog.language,
                 "seller_name": getattr(dialog, 'seller_name', None),
-                "company_id": str(company_id) if company_id else None,
+                "company_id": str(dialog_company_id) if dialog_company_id else None,
+                "company_name": company.name if company else None,
                 "created_at": dialog.created_at.isoformat(),
                 "has_analysis": has_analysis,
                 "overall_score": overall_score,
@@ -633,6 +645,45 @@ async def update_dialog_status(
     except Exception as e:
         logger.error(f"Failed to update status for dialog {dialog_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Status update failed: {str(e)}")
+
+
+class SellerUpdate(dict):
+    """Simple model for seller update."""
+    pass
+
+
+@router.patch("/{dialog_id}/seller", response_model=dict)
+async def update_dialog_seller(
+    dialog_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_auth),
+) -> dict:
+    """Update seller_name for a dialog."""
+    try:
+        try:
+            dialog_uuid = UUID(dialog_id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Invalid dialog ID format")
+
+        query = select(db_models.Dialog).where(db_models.Dialog.id == dialog_uuid)
+        result = await db.execute(query)
+        dialog = result.scalar_one_or_none()
+
+        if not dialog:
+            raise HTTPException(status_code=404, detail="Dialog not found")
+
+        dialog.seller_name = payload.get("seller_name") or None
+        await db.commit()
+
+        logger.info(f"Updated dialog {dialog_id} seller to {dialog.seller_name}")
+        return {"ok": True, "seller_name": dialog.seller_name}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update seller for dialog {dialog_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Seller update failed: {str(e)}")
 
 
 # ---------------------------------------------------------------------------

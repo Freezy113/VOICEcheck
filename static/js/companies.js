@@ -13,6 +13,7 @@ const companiesModule = (() => {
         perPage: 20,
         total: 0,
         search: '',
+        responsible: '',
         industry: '',
         funnelStage: '',
         sortBy: 'created_at',
@@ -20,6 +21,7 @@ const companiesModule = (() => {
         editingId: null,          // null = create mode
         csvData: null,            // upload response
         _searchTimer: null,
+        _responsibleTimer: null,
     };
 
     // ─── Init ─────────────────────────────────────────────────────────────────
@@ -56,6 +58,18 @@ const companiesModule = (() => {
             });
         }
 
+        const responsibleFilter = document.getElementById('companiesResponsibleFilter');
+        if (responsibleFilter) {
+            responsibleFilter.addEventListener('input', () => {
+                clearTimeout(state._responsibleTimer);
+                state._responsibleTimer = setTimeout(() => {
+                    state.responsible = responsibleFilter.value.trim();
+                    state.page = 1;
+                    loadCompanies();
+                }, 400);
+            });
+        }
+
         // Company form submit
         const companyForm = document.getElementById('companyForm');
         if (companyForm) {
@@ -73,7 +87,7 @@ const companiesModule = (() => {
     async function loadCompanies() {
         const tbody = document.getElementById('companiesTbody');
         if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="6" class="no-data"><span class="spinner"></span> Загрузка...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="no-data"><span class="spinner"></span> Загрузка...</td></tr>';
 
         const params = new URLSearchParams({
             page: state.page,
@@ -82,6 +96,7 @@ const companiesModule = (() => {
             sort_dir: state.sortDir,
         });
         if (state.search) params.append('search', state.search);
+        if (state.responsible) params.append('responsible', state.responsible);
 
         try {
             const resp = await authFetch(`/companies?${params}`);
@@ -91,7 +106,7 @@ const companiesModule = (() => {
             renderCompaniesTable(data.items || []);
             renderCompaniesPagination(data.total_pages || 1);
         } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="6" class="no-data" style="color:var(--red)">Ошибка: ${e.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="no-data" style="color:var(--red)">Ошибка: ${e.message}</td></tr>`;
         }
     }
 
@@ -99,7 +114,7 @@ const companiesModule = (() => {
         const tbody = document.getElementById('companiesTbody');
         if (!tbody) return;
         if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="no-data">Нет компаний. Добавьте вручную или импортируйте CSV.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="no-data">Нет компаний. Добавьте вручную или импортируйте CSV.</td></tr>';
             return;
         }
         tbody.innerHTML = items.map(c => {
@@ -118,6 +133,7 @@ const companiesModule = (() => {
                     </div>
                 </td>
                 <td>${escHtml(c.contact_person || '—')}</td>
+                <td>${escHtml(c.responsible || '—')}</td>
                 <td><span class="meetings-badge">${c.meetings_count}</span></td>
                 <td class="text-muted">${lastDate}</td>
                 <td>${scoreHtml}</td>
@@ -196,7 +212,10 @@ const companiesModule = (() => {
         }
 
         // Status counts
-        const statusMap = { dealed: 'Сделки', in_progress: 'В работе', rejected: 'Отказы' };
+        const statusMap = {
+            dealed: 'Сделки', in_progress: 'В работе', rejected: 'Отказы',
+            completed: 'Завершено', pending: 'Ожидание', processing: 'Обработка', failed: 'Ошибка'
+        };
         const statusHtml = Object.entries(c.status_counts || {})
             .map(([s, cnt]) => `<div class="status-stat"><span class="status-badge ${s}">${statusMap[s] || s}</span> <b>${cnt}</b></div>`)
             .join('');
@@ -206,7 +225,7 @@ const companiesModule = (() => {
             ? c.meetings.map(m => {
                 const score = m.overall_score != null ? `<span class="company-score ${scoreClass(m.overall_score)}">${m.overall_score.toFixed(1)}</span>` : '';
                 const date = m.created_at ? new Date(m.created_at).toLocaleDateString('ru-RU') : '';
-                return `<div class="meeting-row">
+                return `<div class="meeting-row" data-id="${m.id}" style="cursor:pointer;">
                     <div class="meeting-info">
                         <span class="meeting-name">${escHtml(m.filename)}</span>
                         <span class="text-muted" style="font-size:.8rem;">${date}${m.seller_name ? ' · ' + escHtml(m.seller_name) : ''}</span>
@@ -274,6 +293,15 @@ const companiesModule = (() => {
                 <div class="objections-cloud">${objectionsHtml}</div>
             </div>
         </div>`;
+
+        // Click on meeting row → open dialog modal
+        content.querySelectorAll('.meeting-row[data-id]').forEach(row => {
+            row.addEventListener('click', () => {
+                if (window.app && typeof window.app.openEvaluation === 'function') {
+                    window.app.openEvaluation(row.dataset.id);
+                }
+            });
+        });
     }
 
     function renderSparkline(trend) {
@@ -740,7 +768,15 @@ const companiesModule = (() => {
     }
 
     function getStatusText(s) {
-        const m = { completed: 'В работе', dealed: 'Сделка состоялась', in_progress: 'В работе', rejected: 'Отказ', pending: 'Ожидание', processing: 'Обработка', failed: 'Ошибка' };
+        const m = {
+            completed: 'Завершено',
+            dealed: 'Сделка',
+            in_progress: 'В работе',
+            rejected: 'Отказ',
+            pending: 'Ожидание',
+            processing: 'Обработка',
+            failed: 'Ошибка'
+        };
         return m[s] || s;
     }
 

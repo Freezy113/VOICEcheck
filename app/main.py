@@ -559,6 +559,7 @@ async def health() -> Dict[str, Any]:
 async def upload_file(
     file: UploadFile = File(...),
     seller_name: Optional[str] = Form(default=None),
+    name: Optional[str] = Form(default=None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_auth),
     org_ctx: Optional[OrganizationContext] = Depends(get_current_organization),
@@ -657,9 +658,10 @@ async def upload_file(
                 dialog_owner_type = "user"
                 dialog_owner_id = user.id
 
+        display_name = (name.strip() if name and name.strip() else None) or file.filename
         db_dialog = db_models.Dialog(
             id=dialog_uuid,
-            filename=file.filename,
+            filename=display_name,
             duration=duration,
             status="pending",
             file_path=str(saved_path),

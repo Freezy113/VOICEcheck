@@ -78,6 +78,7 @@ class VoiceCheckApp {
         this.attachEventListeners();
         this.addAuthUI();
         this.loadSellers();
+        this.loadCompaniesFilter();
     }
 
     addAuthUI() {
@@ -300,6 +301,8 @@ class VoiceCheckApp {
         this.languageSelect = document.getElementById('languageSelect');
         this.sellerInput = document.getElementById('sellerInput');
         this.sellerNameInput = document.getElementById('sellerName');
+        this.dialogNameGroup = document.getElementById('dialogNameGroup');
+        this.dialogNameInput = document.getElementById('dialogNameInput');
         this.statusArea = document.getElementById('statusArea');
         this.statusMessage = document.getElementById('statusMessage');
         this.progressFill = document.getElementById('progressFill');
@@ -317,6 +320,7 @@ class VoiceCheckApp {
         this.searchFilter = document.getElementById('searchFilter');
         this.sellerFilter = document.getElementById('sellerFilter');
         this.scoreFilter = document.getElementById('scoreFilter');
+        this.companyFilter = document.getElementById('companyFilter');
         this.statsGrid = document.getElementById('statsGrid');
         this.dashDateFrom = document.getElementById('dashDateFrom');
         this.dashDateTo = document.getElementById('dashDateTo');
@@ -357,6 +361,7 @@ class VoiceCheckApp {
         });
         this.sellerFilter.addEventListener('change', () => { this.filters.seller_name = this.sellerFilter.value; this.currentPage = 1; this.loadDialogs(); });
         this.scoreFilter.addEventListener('change', () => { this.filters.min_score = this.scoreFilter.value; this.currentPage = 1; this.loadDialogs(); });
+        if (this.companyFilter) this.companyFilter.addEventListener('change', () => { this.filters.company_id = this.companyFilter.value; this.currentPage = 1; this.loadDialogs(); });
 
         this.dashRefreshBtn.addEventListener('click', () => this.loadDashboard());
 
@@ -405,7 +410,7 @@ class VoiceCheckApp {
         this.currentTab = tab;
         this.tabBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
         this.tabPanes.forEach(pane => pane.classList.toggle('active', pane.id === `${tab}-tab`));
-        if (tab === 'dialogs') this.loadDialogs();
+        if (tab === 'dialogs') { this.loadDialogs(); this.loadCompaniesFilter(); }
         if (tab === 'companies') companiesModule.loadCompanies();
         if (tab === 'organizations') loadOrganizationsForTab();
         if (tab === 'dashboard') this.loadDashboard();
@@ -436,6 +441,7 @@ class VoiceCheckApp {
         this.fileInfo.classList.add('active');
         this.languageSelector.style.display = 'block';
         this.sellerInput.style.display = 'block';
+        if (this.dialogNameGroup) this.dialogNameGroup.style.display = 'block';
         this.uploadBtn.disabled = false;
     }
 
@@ -446,6 +452,8 @@ class VoiceCheckApp {
         formData.append('file', this.selectedFile);
         const sellerName = this.sellerNameInput.value;
         if (sellerName && sellerName !== '__new__') formData.append('seller_name', sellerName);
+        const dialogName = this.dialogNameInput ? this.dialogNameInput.value.trim() : '';
+        if (dialogName) formData.append('name', dialogName);
         try {
             const response = await authFetch('/upload', { method: 'POST', body: formData });
             if (!response.ok) { const error = await response.json(); throw new Error(error.detail || 'Ошибка загрузки файла'); }
@@ -532,6 +540,8 @@ class VoiceCheckApp {
         this.modeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === 'file'));
         this.uploadArea.style.display = 'block';
         this.recordArea.style.display = 'none';
+        if (this.dialogNameGroup) this.dialogNameGroup.style.display = 'none';
+        if (this.dialogNameInput) this.dialogNameInput.value = '';
     }
 
     async copyResult() {
@@ -563,6 +573,8 @@ class VoiceCheckApp {
 
         this.fileInfo.classList.remove('active');
         this.languageSelector.style.display = 'none'; this.sellerInput.style.display = 'none';
+        if (this.dialogNameGroup) { this.dialogNameGroup.style.display = 'none'; }
+        if (this.dialogNameInput) { this.dialogNameInput.value = ''; }
         this.sellerNameInput.value = ''; this.uploadBtn.disabled = true; this.uploadBtn.textContent = 'Загрузить и анализировать';
         this.statusArea.classList.remove('active'); this.resultArea.classList.remove('active');
         this.progressFill.style.width = '0%'; this.hideError();
@@ -582,6 +594,7 @@ class VoiceCheckApp {
             if (this.filters.search) params.append('search', this.filters.search);
             if (this.filters.seller_name) params.append('seller_name', this.filters.seller_name);
             if (this.filters.min_score) params.append('min_score', this.filters.min_score);
+            if (this.filters.company_id) params.append('company_id', this.filters.company_id);
             const response = await authFetch(`/dialogs?${params}`);
             if (response.status === 404) { this.dialogs = []; this.totalDialogs = 0; this.renderDialogs(); return; }
             if (!response.ok) throw new Error('Ошибка загрузки диалогов');
@@ -597,7 +610,8 @@ class VoiceCheckApp {
         }
         this.dialogsList.innerHTML = this.dialogs.map(dialog => {
             const scoreDisplay = dialog.overall_score != null ? dialog.overall_score.toFixed(1) : (dialog.has_analysis ? '...' : '-');
-            const sellerTag = dialog.seller_name ? `<span class="dialog-seller">${dialog.seller_name}</span>` : '';
+            const sellerTag = dialog.seller_name ? `<span class="dialog-seller">👤 ${dialog.seller_name}</span>` : '';
+            const companyTag = dialog.company_name ? `<span class="dialog-seller">🏢 ${dialog.company_name}</span>` : '';
             return `
                 <div class="dialog-item" data-dialog-id="${dialog.id}">
                     <div class="dialog-info">
@@ -607,6 +621,7 @@ class VoiceCheckApp {
                             <span class="dialog-duration">${this.formatDuration(dialog.duration)}</span>
                             <span class="status-badge ${dialog.status}">${this.getStatusText(dialog.status)}</span>
                             ${sellerTag}
+                            ${companyTag}
                         </div>
                     </div>
                     <div class="dialog-score">
@@ -667,6 +682,15 @@ class VoiceCheckApp {
                 <div class="evaluation-meta">${new Date(d.created_at).toLocaleDateString('ru-RU')} | ${this.formatDuration(d.duration)}${d.seller_name ? ' | ' + d.seller_name : ''}</div>
             </div>
             <div class="company-link-section">
+                <div class="company-link-row" style="margin-bottom:8px;">
+                    <label class="company-link-label">Продавец:</label>
+                    <div style="display:flex;gap:8px;align-items:center;flex:1;">
+                        <select id="modalSellerSelect" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--input-bg,#1e2028);color:var(--text);font-size:.9rem;">
+                            <option value="">Не указан</option>
+                        </select>
+                        <button id="modalSellerSaveBtn" class="btn btn-small btn-primary">Сохранить</button>
+                    </div>
+                </div>
                 <div class="company-link-row">
                     <label class="company-link-label">Компания:</label>
                     <div class="company-autocomplete" id="companyAutocomplete">
@@ -932,6 +956,37 @@ class VoiceCheckApp {
         } else if (d.company_id && d.company_name && suggestionContainer) {
             suggestionContainer.innerHTML = `<span style="color:var(--green);font-size:.85rem;">Привязана: <b>${d.company_name}</b></span>`;
         }
+
+        // Seller section in modal
+        const modalSellerSelect = document.getElementById('modalSellerSelect');
+        const modalSellerSaveBtn = document.getElementById('modalSellerSaveBtn');
+        if (modalSellerSelect) {
+            // Populate with same seller list
+            const sellerNames = Array.from(this.sellerNameInput.options)
+                .map(o => o.value)
+                .filter(v => v && v !== '__new__');
+            modalSellerSelect.innerHTML = '<option value="">Не указан</option>';
+            sellerNames.forEach(name => {
+                modalSellerSelect.innerHTML += `<option value="${name}">${name}</option>`;
+            });
+            if (d.seller_name) modalSellerSelect.value = d.seller_name;
+        }
+        if (modalSellerSaveBtn) {
+            modalSellerSaveBtn.addEventListener('click', async () => {
+                const sellerVal = modalSellerSelect ? modalSellerSelect.value : '';
+                modalSellerSaveBtn.disabled = true; modalSellerSaveBtn.textContent = '...';
+                try {
+                    const resp = await authFetch(`/dialogs/${d.id}/seller`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ seller_name: sellerVal || null }),
+                    });
+                    modalSellerSaveBtn.textContent = resp.ok ? '✓' : 'Ошибка';
+                    if (resp.ok) { d.seller_name = sellerVal || null; }
+                } catch { modalSellerSaveBtn.textContent = 'Ошибка'; }
+                setTimeout(() => { modalSellerSaveBtn.disabled = false; modalSellerSaveBtn.textContent = 'Сохранить'; }, 2000);
+            });
+        }
     }
 
     // Speaking time chart
@@ -1015,9 +1070,20 @@ class VoiceCheckApp {
     // Sellers
     async loadSellers() {
         try {
-            const response = await authFetch('/dialogs/sellers');
-            if (!response.ok) return;
-            const sellers = await response.json();
+            let sellers = [];
+            if (currentOrg && currentOrg.id) {
+                // Load from org members — full_name list
+                const resp = await authFetch(`/organizations/${currentOrg.id}/members`);
+                if (resp.ok) {
+                    const members = await resp.json();
+                    sellers = members.map(m => m.full_name).filter(Boolean);
+                }
+            }
+            if (sellers.length === 0) {
+                // Fallback: unique seller names from existing dialogs
+                const resp = await authFetch('/dialogs/sellers');
+                if (resp.ok) sellers = await resp.json();
+            }
             this.populateSellerDropdowns(sellers);
         } catch (e) { console.error('Failed to load sellers:', e); }
     }
@@ -1027,6 +1093,9 @@ class VoiceCheckApp {
         uploadSelect.innerHTML = '<option value="">Не указан</option>';
         sellers.forEach(name => { uploadSelect.innerHTML += `<option value="${name}">${name}</option>`; });
         uploadSelect.innerHTML += '<option value="__new__">+ Новый продавец...</option>';
+        // Default to current user
+        const currentName = currentUser && currentUser.full_name;
+        if (currentName && sellers.includes(currentName)) { uploadSelect.value = currentName; }
 
         const filterSelect = this.sellerFilter;
         filterSelect.innerHTML = '<option value="">Все продавцы</option>';
@@ -1035,6 +1104,20 @@ class VoiceCheckApp {
         const dashSelect = this.dashSellerFilter;
         dashSelect.innerHTML = '<option value="">Все продавцы</option>';
         sellers.forEach(name => { dashSelect.innerHTML += `<option value="${name}">${name}</option>`; });
+    }
+
+    async loadCompaniesFilter() {
+        try {
+            const resp = await authFetch('/companies/search?q=&limit=200');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const companies = data.items || data;
+            if (!this.companyFilter) return;
+            this.companyFilter.innerHTML = '<option value="">Все компании</option>';
+            companies.forEach(c => {
+                this.companyFilter.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+            });
+        } catch (e) { console.error('Failed to load companies filter:', e); }
     }
 
     // Utilities
