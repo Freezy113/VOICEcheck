@@ -124,7 +124,7 @@ class LLMAnalyzer:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "claude-3-5-sonnet",
+        model: str = os.getenv("ZAI_MODEL", "glm-4.5-air"),
         timeout: int = DEFAULT_TIMEOUT,
         max_retries: int = MAX_RETRIES
     ) -> None:
