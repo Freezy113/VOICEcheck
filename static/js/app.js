@@ -420,6 +420,14 @@ class VoiceCheckApp {
             this.showError('Пожалуйста, выберите аудиофайл (MP3, WAV, M4A, OGG, FLAC)'); return;
         }
         if (file.size > 50 * 1024 * 1024) { this.showError('Файл слишком большой. Максимальный размер: 50MB'); return; }
+        // Clear any previous transcription result when a new file is selected
+        this.stopPolling();
+        this.taskId = null;
+        this.fileId = null;
+        this.resultArea.classList.remove('active');
+        this.statusArea.classList.remove('active');
+        this.progressFill.style.width = '0%';
+        this.hideError();
         this.selectedFile = file;
         this.hideError();
         this.fileName.textContent = file.name;
@@ -510,6 +518,20 @@ class VoiceCheckApp {
                 }).join('');
             } else { this.resultText.textContent = data.result.text; }
         }
+        // Reset file/recording state so the next upload always starts fresh.
+        // Without this, selectedFile still holds the old blob and uploadBtn
+        // could re-submit the same audio if the user clicks it again.
+        this.selectedFile = null;
+        this.fileInput.value = '';
+        this.fileInfo.classList.remove('active');
+        this.languageSelector.style.display = 'none';
+        this.sellerInput.style.display = 'none';
+        this.uploadBtn.disabled = true;
+        this.uploadBtn.textContent = 'Загрузить и анализировать';
+        // Switch UI back to file-upload mode so user can immediately drop a new file
+        this.modeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === 'file'));
+        this.uploadArea.style.display = 'block';
+        this.recordArea.style.display = 'none';
     }
 
     async copyResult() {
@@ -1041,6 +1063,13 @@ class VoiceCheckApp {
         if (mode === 'file') {
             this.uploadArea.style.display = 'block';
             this.recordArea.style.display = 'none';
+            // Clear recording leftovers: fileInfo may still show the recorded file
+            this.fileInfo.classList.remove('active');
+            this.languageSelector.style.display = 'none';
+            this.sellerInput.style.display = 'none';
+            this.uploadBtn.disabled = true;
+            this.selectedFile = null;
+            this.fileInput.value = '';
         } else {
             this.uploadArea.style.display = 'none';
             this.recordArea.style.display = 'block';

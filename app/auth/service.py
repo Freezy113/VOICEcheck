@@ -312,7 +312,7 @@ class AuthService:
             return payload
         except jwt.ExpiredSignatureError:
             raise ValueError("Token has expired")
-        except jwt.InvalidTokenError as e:
+        except jwt.JWTError as e:
             raise ValueError(f"Invalid token: {str(e)}")
 
     def verify_token_type(self, payload: Dict[str, Any], token_type: str) -> bool:
